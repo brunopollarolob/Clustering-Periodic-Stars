@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Script para evaluar modelos de clustering y detección de anomalías.
+Script for evaluating clustering and anomaly detection models.
 """
 
 import os
@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.metrics import silhouette_score, davies_bouldin_score
 
-# Añadir el directorio raíz al path para importar módulos locales
+# Add the root directory to the path to import local modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from models import AutoencoderMCDSVDD, AutoencoderGMM
@@ -24,16 +24,16 @@ from clustering_stars.utils.visualization import visualize_latent_space, plot_an
 
 def load_model(model_path, device='cpu'):
     """
-    Carga un modelo entrenado desde un archivo.
+    Load a trained model from a file.
     
     Args:
-        model_path (str): Ruta al archivo de modelo.
-        device (str): Dispositivo para ejecutar el modelo ('cpu' o 'cuda').
+        model_path (str): Path to the model file.
+        device (str): Device to run the model on ('cpu' or 'cuda').
         
     Returns:
-        tuple: (model, model_info) Modelo cargado e información del modelo.
+        tuple: (model, model_info) Loaded model and model information.
     """
-    print(f"Cargando modelo desde {model_path}...")
+    print(f"Loading model from {model_path}...")
     checkpoint = torch.load(model_path, map_location=device)
     
     model_type = checkpoint['model_type']
@@ -41,20 +41,20 @@ def load_model(model_path, device='cpu'):
     latent_dim = checkpoint['latent_dim']
     num_classes = checkpoint['num_classes']
     
-    print(f"Tipo de modelo: {model_type}")
-    print(f"Dimensión de entrada: {input_dim}")
-    print(f"Dimensión latente: {latent_dim}")
-    print(f"Número de clases: {num_classes}")
+    print(f"Model type: {model_type}")
+    print(f"Input dimension: {input_dim}")
+    print(f"Latent dimension: {latent_dim}")
+    print(f"Number of classes: {num_classes}")
     
     if 'class_names' in checkpoint:
-        print(f"Nombres de clases: {checkpoint['class_names']}")
+        print(f"Class names: {checkpoint['class_names']}")
     
     if model_type.lower() == 'mcdsvdd':
         model = AutoencoderMCDSVDD(in_dim=input_dim, z_dim=latent_dim, num_classes=num_classes)
     elif model_type.lower() == 'gmm':
         model = AutoencoderGMM(input_dim=input_dim, latent_dim=latent_dim, n_gmm=num_classes)
     else:
-        raise ValueError(f"Tipo de modelo no soportado: {model_type}")
+        raise ValueError(f"Unsupported model type: {model_type}")
     
     model.load_state_dict(checkpoint['model_state_dict'])
     model.to(device)
@@ -64,21 +64,21 @@ def load_model(model_path, device='cpu'):
 
 def prepare_data(data_file, labels_file, batch_size=64):
     """
-    Prepara los datos para evaluación.
+    Prepare data for evaluation.
     
     Args:
-        data_file (str): Ruta al archivo de características.
-        labels_file (str): Ruta al archivo de etiquetas.
-        batch_size (int): Tamaño de batch.
+        data_file (str): Path to the features file.
+        labels_file (str): Path to the labels file.
+        batch_size (int): Batch size.
         
     Returns:
-        tuple: (dataloader, label_encoder) DataLoader y codificador de etiquetas.
+        tuple: (dataloader, label_encoder, df) DataLoader, label encoder, and concatenated dataframe.
     """
-    print(f"Cargando datos desde {data_file} y {labels_file}...")
+    print(f"Loading data from {data_file} and {labels_file}...")
     features = pd.read_parquet(data_file)
     labels = pd.read_parquet(labels_file)
     
-    # Preparar características
+    # Prepare features
     if 'oid' in features.columns:
         features_index = features['oid']
         features = features.set_index('oid')
@@ -86,36 +86,36 @@ def prepare_data(data_file, labels_file, batch_size=64):
     if 'oid' in labels.columns:
         labels = labels.set_index('oid')
     
-    # Seleccionar solo la columna de clase
+    # Select only the class column
     class_column = 'alerceclass' if 'alerceclass' in labels.columns else labels.columns[0]
     labels = labels[[class_column]]
     
-    # Llenar valores faltantes
+    # Fill missing values
     numeric_columns = features.select_dtypes(include=[np.number]).columns
     from preprocessing import fill_missing_values
     features_filled = fill_missing_values(features, numeric_columns)
     
-    # Concatenar etiquetas y características
+    # Concatenate labels and features
     df_concatenated = pd.concat([labels, features_filled], axis=1)
     df_concatenated.dropna(inplace=True)
     
-    # Dividir en características y etiquetas
+    # Split into features and labels
     X = df_concatenated.drop(columns=[class_column]).values
     y = df_concatenated[class_column].values
     
-    # Normalizar características
+    # Normalize features
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
     
-    # Codificar etiquetas
+    # Encode labels
     label_encoder = LabelEncoder()
     y_encoded = label_encoder.fit_transform(y)
     
-    # Convertir a tensores
+    # Convert to tensors
     X_tensor = torch.tensor(X_scaled, dtype=torch.float32)
     y_tensor = torch.tensor(y_encoded, dtype=torch.long)
     
-    # Crear dataset y dataloader
+    # Create dataset and dataloader
     dataset = torch.utils.data.TensorDataset(X_tensor, y_tensor)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
     
@@ -123,32 +123,32 @@ def prepare_data(data_file, labels_file, batch_size=64):
 
 def evaluate_model(model, dataloader, label_encoder, model_type, output_dir=None):
     """
-    Evalúa un modelo entrenado.
+    Evaluate a trained model.
     
     Args:
-        model: Modelo entrenado.
-        dataloader: DataLoader con datos a evaluar.
-        label_encoder: Codificador de etiquetas.
-        model_type (str): Tipo de modelo ('mcdsvdd' o 'gmm').
-        output_dir (str): Directorio para guardar resultados.
+        model: Trained model.
+        dataloader: DataLoader with data to evaluate.
+        label_encoder: Label encoder.
+        model_type (str): Model type ('mcdsvdd' or 'gmm').
+        output_dir (str): Directory to save results.
         
     Returns:
-        dict: Resultados de la evaluación.
+        dict: Evaluation results.
     """
-    print(f"Evaluando modelo de tipo {model_type}...")
+    print(f"Evaluating model of type {model_type}...")
     
     results = {}
     
     if model_type.lower() == 'mcdsvdd':
-        # Inicializar centros para MCDSVDD
+        # Initialize centers for MCDSVDD
         model.set_centers(dataloader)
         
-        # Detectar anomalías y visualizar el espacio latente
-        print("Detectando anomalías y visualizando espacio latente...")
-        predictions, davies_bouldin, silhouette = plot_umap_projection(dataloader, 'Evaluación', model)
+        # Detect anomalies and visualize the latent space
+        print("Detecting anomalies and visualizing latent space...")
+        predictions, davies_bouldin, silhouette = plot_umap_projection(dataloader, 'Evaluation', model)
         
-        # Visualizar distribución de puntuaciones de anomalía
-        print("Visualizando puntuaciones de anomalía...")
+        # Visualize anomaly score distribution
+        print("Visualizing anomaly scores...")
         df_scores = plot_anomaly_scores(model, dataloader)
         
         results = {
@@ -159,12 +159,12 @@ def evaluate_model(model, dataloader, label_encoder, model_type, output_dir=None
         }
         
     elif model_type.lower() == 'gmm':
-        # Visualizar el espacio latente
-        print("Visualizando espacio latente...")
+        # Visualize the latent space
+        print("Visualizing latent space...")
         z = model.get_latent_space(dataloader)
         visualize_latent_space(z, label_encoder)
         
-        # Calcular métricas
+        # Calculate metrics
         z_feats = z[0].cpu().numpy()
         z_labels = z[1].cpu().numpy()
         silhouette = silhouette_score(z_feats, z_labels)
@@ -178,117 +178,117 @@ def evaluate_model(model, dataloader, label_encoder, model_type, output_dir=None
             'davies_bouldin': davies_bouldin
         }
     
-    # Guardar resultados si se especificó un directorio
+    # Save results if a directory was specified
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         
-        # Guardar métricas
+        # Save metrics
         metrics_file = os.path.join(output_dir, 'metrics.txt')
         with open(metrics_file, 'w') as f:
             for key, value in results.items():
                 if isinstance(value, (float, int)):
                     f.write(f"{key}: {value}\n")
             
-        print(f"Métricas guardadas en {metrics_file}")
+        print(f"Metrics saved to {metrics_file}")
     
     return results
 
 def plot_learning_curves(history, model_type, output_dir=None):
     """
-    Visualiza las curvas de aprendizaje del modelo.
+    Visualize the learning curves of the model.
     
     Args:
-        history: Historial de entrenamiento.
-        model_type (str): Tipo de modelo ('mcdsvdd' o 'gmm').
-        output_dir (str): Directorio para guardar gráficos.
+        history: Training history.
+        model_type (str): Model type ('mcdsvdd' or 'gmm').
+        output_dir (str): Directory to save plots.
     """
     if model_type.lower() == 'mcdsvdd':
-        # Pérdida del autoencoder
+        # Autoencoder loss
         plt.figure(figsize=(12, 5))
         plt.subplot(1, 2, 1)
-        plt.plot(history['autoencoder']['train_loss'], label='Entrenamiento')
-        plt.plot(history['autoencoder']['val_loss'], label='Validación')
-        plt.title('Pérdida del Autoencoder')
-        plt.xlabel('Época')
-        plt.ylabel('Pérdida')
+        plt.plot(history['autoencoder']['train_loss'], label='Training')
+        plt.plot(history['autoencoder']['val_loss'], label='Validation')
+        plt.title('Autoencoder Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
         plt.legend()
         plt.grid(True, linestyle='--', alpha=0.7)
         
-        # Pérdida MCDSVDD
+        # MCDSVDD loss
         plt.subplot(1, 2, 2)
-        plt.plot(history['mcdsvdd']['train_loss'], label='Entrenamiento')
-        plt.plot(history['mcdsvdd']['val_loss'], label='Validación')
-        plt.title('Pérdida MCDSVDD')
-        plt.xlabel('Época')
-        plt.ylabel('Pérdida')
+        plt.plot(history['mcdsvdd']['train_loss'], label='Training')
+        plt.plot(history['mcdsvdd']['val_loss'], label='Validation')
+        plt.title('MCDSVDD Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
         plt.legend()
         plt.grid(True, linestyle='--', alpha=0.7)
         
     elif model_type.lower() == 'gmm':
-        # Pérdida total
+        # Total loss
         plt.figure(figsize=(15, 5))
         plt.subplot(1, 3, 1)
         plt.plot(history['gmm']['loss'])
-        plt.title('Pérdida Total')
-        plt.xlabel('Época')
-        plt.ylabel('Pérdida')
+        plt.title('Total Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
         plt.grid(True, linestyle='--', alpha=0.7)
         
-        # Error de reconstrucción
+        # Reconstruction error
         plt.subplot(1, 3, 2)
         plt.plot(history['gmm']['reconstruction'])
-        plt.title('Error de Reconstrucción')
-        plt.xlabel('Época')
+        plt.title('Reconstruction Error')
+        plt.xlabel('Epoch')
         plt.ylabel('Error')
         plt.grid(True, linestyle='--', alpha=0.7)
         
-        # Energía
+        # Energy
         plt.subplot(1, 3, 3)
         plt.plot(history['gmm']['energy'])
-        plt.title('Energía')
-        plt.xlabel('Época')
-        plt.ylabel('Energía')
+        plt.title('Energy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Energy')
         plt.grid(True, linestyle='--', alpha=0.7)
     
     plt.tight_layout()
     
-    # Guardar gráfico si se especificó un directorio
+    # Save plot if a directory was specified
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         plot_file = os.path.join(output_dir, f'learning_curves_{model_type}.png')
         plt.savefig(plot_file)
-        print(f"Curvas de aprendizaje guardadas en {plot_file}")
+        print(f"Learning curves saved to {plot_file}")
     
     plt.show()
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Evaluación de modelos de clustering y detección de anomalías')
+        description='Evaluation of clustering and anomaly detection models')
     
     parser.add_argument('--model_file', type=str, required=True,
-                        help='Ruta al archivo de modelo entrenado')
+                        help='Path to the trained model file')
     parser.add_argument('--data_file', type=str, required=True,
-                        help='Ruta al archivo con características (.parquet)')
+                        help='Path to the features file (.parquet)')
     parser.add_argument('--labels_file', type=str, required=True,
-                        help='Ruta al archivo con etiquetas (.parquet)')
+                        help='Path to the labels file (.parquet)')
     parser.add_argument('--output_dir', type=str, default=None,
-                        help='Directorio para guardar resultados')
+                        help='Directory to save results')
     parser.add_argument('--batch_size', type=int, default=64,
-                        help='Tamaño de batch para evaluación')
+                        help='Batch size for evaluation')
     parser.add_argument('--plot_history', action='store_true',
-                        help='Visualizar curvas de aprendizaje')
+                        help='Visualize learning curves')
     parser.add_argument('--device', type=str, default='cpu',
-                        help='Dispositivo para ejecutar el modelo (cpu o cuda)')
+                        help='Device to run the model on (cpu or cuda)')
     
     args = parser.parse_args()
     
-    # Cargar modelo
+    # Load model
     model, checkpoint = load_model(args.model_file, args.device)
     
-    # Preparar datos
+    # Prepare data
     dataloader, label_encoder, df = prepare_data(args.data_file, args.labels_file, args.batch_size)
     
-    # Evaluar modelo
+    # Evaluate model
     results = evaluate_model(
         model=model,
         dataloader=dataloader,
@@ -297,7 +297,7 @@ def main():
         output_dir=args.output_dir
     )
     
-    # Visualizar curvas de aprendizaje si se solicita
+    # Visualize learning curves if requested
     if args.plot_history and 'history' in checkpoint:
         plot_learning_curves(
             history=checkpoint['history'],
